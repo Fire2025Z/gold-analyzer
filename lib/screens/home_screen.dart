@@ -993,22 +993,25 @@ class _HomeContentState extends State<HomeContent> {
     });
   }
   
-  Future<void> _refreshPriceOnly() async {
-    try {
-      final priceService = GoldPriceService();
-      final newPrice = await priceService.forceRefreshPrice();
-      
-      if (mounted) {
-        setState(() {
-          previousPrice = currentPrice;
-          currentPrice = newPrice;
-          lastUpdate = DateTime.now();
-        });
-      }
-    } catch (e) {
-      // Silent fail for price updates
+// In the _HomeContentState class, update _refreshPriceOnly method
+
+Future<void> _refreshPriceOnly() async {
+  try {
+    final priceService = GoldPriceService();
+    final newPrice = await priceService.forceRefreshPrice();
+    
+    if (mounted) {
+      setState(() {
+        previousPrice = currentPrice;
+        currentPrice = newPrice;
+        lastUpdate = DateTime.now();
+      });
     }
+  } catch (e) {
+    print('⚠️ Failed to refresh price: $e');
+    // Don't update price if it fails, keep the existing one
   }
+}
   
   Future<void> _manualRefresh() async {
     setState(() {

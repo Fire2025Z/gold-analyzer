@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/economic_event_model.dart';
 
+
 final economicCalendarServiceProvider = Provider((ref) => EconomicCalendarService());
 
 class EconomicCalendarService {
@@ -12,131 +13,101 @@ class EconomicCalendarService {
     receiveTimeout: const Duration(seconds: 30),
   ));
 
-  Future<List<EconomicEventModel>> getTodaysEvents() async {
-    try {
-      // Try direct function URL first
-      final String url = '/.netlify/functions/economic-calendar';
+// In the getTodaysEvents method, ensure JSON parsing is handled properly
+
+Future<List<EconomicEventModel>> getTodaysEvents() async {
+  try {
+    // Try direct function URL first
+    final String url = '/.netlify/functions/economic-calendar';
+    
+    print('📊 Fetching from: $url');
+    final response = await _dio.get(url);
+    
+    print('📊 Response status: ${response.statusCode}');
+    print('📊 Response data type: ${response.data.runtimeType}');
+    
+    if (response.statusCode == 200 && response.data != null) {
+      dynamic data = response.data;
       
-      print('📊 Fetching from: $url');
-      final response = await _dio.get(url);
-      
-      print('📊 Response status: ${response.statusCode}');
-      print('📊 Response data type: ${response.data.runtimeType}');
-      
-      if (response.statusCode == 200 && response.data != null) {
-        dynamic data = response.data;
-        
-        // If response is String, parse it
-        if (data is String) {
-          try {
-            data = jsonDecode(data);
-            print('📊 Parsed JSON successfully');
-          } catch (e) {
-            print('⚠️ Could not parse JSON: $e');
-            // Try to extract data from HTML (if it's HTML)
-            if (data.contains('[') && data.contains(']')) {
-              try {
-                final start = data.indexOf('[');
-                final end = data.lastIndexOf(']') + 1;
-                if (start != -1 && end != -1) {
-                  final jsonStr = data.substring(start, end);
-                  data = jsonDecode(jsonStr);
-                  print('📊 Extracted JSON from HTML');
-                }
-              } catch (e2) {
-                print('⚠️ Could not extract JSON from HTML');
-              }
-            }
-          }
-        }
-        
-        // Check if it's an error response
-        if (data is Map && data.containsKey('error')) {
-          print('❌ Function returned error: ${data['error']}');
-          // Check if there's fallback data
-          if (data.containsKey('data')) {
-            data = data['data'];
-          } else {
-            throw Exception('Function error: ${data['error']}');
-          }
-        }
-        
-        // Parse the data
-        List? eventList;
-        if (data is List) {
-          eventList = data;
-        } else if (data is Map) {
-          print('📊 Data is Map, keys: ${data.keys}');
-          if (data.containsKey('events')) {
-            eventList = data['events'] as List?;
-          } else if (data.containsKey('data')) {
-            eventList = data['data'] as List?;
-          } else if (data.containsKey('calendar')) {
-            eventList = data['calendar'] as List?;
-          } else {
-            // Try to find any list in the map
-            for (var value in data.values) {
-              if (value is List) {
-                eventList = value;
-                break;
-              }
-            }
-          }
-        }
-        
-        if (eventList != null && eventList.isNotEmpty) {
-          final events = _parseForexFactoryData(eventList);
-          if (events.isNotEmpty) {
-            print('✅ Loaded ${events.length} events');
-            return events;
-          } else {
-            print('⚠️ No gold-impacting events found');
-          }
-        } else {
-          print('⚠️ No event list found in data');
-          if (data != null) {
-            print('📊 Data preview: ${data.toString().substring(0, 200)}...');
-          }
-        }
-      }
-      
-      // If we get here, something went wrong
-      throw Exception('Unable to parse economic calendar data');
-      
-    } catch (e) {
-      print('❌ API Error: $e');
-      
-      // Fallback for local development only
-      if (Uri.base.host == 'localhost' || Uri.base.host == '127.0.0.1') {
+      // If response is String, parse it
+      if (data is String) {
         try {
-          print('⚠️ Trying fallback for local development...');
-          final response2 = await _dio.get(
-            'https://corsproxy.io/?url=' +
-            Uri.encodeComponent('https://nfs.faireconomy.media/ff_calendar_thisweek.json'),
-          );
-          
-          if (response2.statusCode == 200 && response2.data != null) {
-            dynamic data = response2.data;
-            if (data is String) {
-              data = jsonDecode(data);
-            }
-            
-            if (data is List) {
-              final events = _parseForexFactoryData(data);
-              if (events.isNotEmpty) {
-                print('✅ Loaded ${events.length} events from fallback');
-                return events;
+          data = jsonDecode(data);
+          print('📊 Parsed JSON successfully');
+        } catch (e) {
+          print('⚠️ Could not parse JSON: $e');
+          // Try to extract data from HTML (if it's HTML)
+          if (data.contains('[') && data.contains(']')) {
+            try {
+              final start = data.indexOf('[');
+              final end = data.lastIndexOf(']') + 1;
+              if (start != -1 && end != -1) {
+                final jsonStr = data.substring(start, end);
+                data = jsonDecode(jsonStr);
+                print('📊 Extracted JSON from HTML');
               }
+            } catch (e2) {
+              print('⚠️ Could not extract JSON from HTML');
             }
           }
-        } catch (e2) {
-          print('⚠️ Fallback failed: $e2');
         }
       }
       
-      throw Exception('Failed to fetch economic data: $e');
+      // Check if it's an error response
+      if (data is Map && data.containsKey('error')) {
+        print('❌ Function returned error: ${data['error']}');
+        throw Exception('Function error: ${data['error']}');
+      }
+      
+      // Parse the data - handle both List and Map responses
+      List? eventList;
+      if (data is List) {
+        eventList = data;
+      } else if (data is Map) {
+        print('📊 Data is Map, keys: ${data.keys}');
+        // Try to find the events list
+        if (data.containsKey('events')) {
+          eventList = data['events'] as List?;
+        } else if (data.containsKey('data')) {
+          eventList = data['data'] as List?;
+        } else if (data.containsKey('calendar')) {
+          eventList = data['calendar'] as List?;
+        } else {
+          // Try to find any list in the map
+          for (var value in data.values) {
+            if (value is List) {
+              eventList = value;
+              break;
+            }
+          }
+        }
+      }
+      
+      if (eventList != null && eventList.isNotEmpty) {
+        final events = _parseForexFactoryData(eventList);
+        if (events.isNotEmpty) {
+          print('✅ Loaded ${events.length} events');
+          return events;
+        } else {
+          print('⚠️ No gold-impacting events found');
+        }
+      } else {
+        print('⚠️ No event list found in data');
+        if (data != null) {
+          final dataStr = data.toString();
+          print('📊 Data preview: ${dataStr.substring(0, dataStr.length > 200 ? 200 : dataStr.length)}...');
+        }
+      }
     }
+    
+    // If we get here, something went wrong
+    throw Exception('Unable to parse economic calendar data');
+    
+  } catch (e) {
+    print('❌ API Error: $e');
+    throw Exception('Failed to fetch economic data: $e');
   }
+}
 
   List<EconomicEventModel> _parseForexFactoryData(List data) {
     final List<EconomicEventModel> events = [];

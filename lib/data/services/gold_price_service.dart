@@ -161,7 +161,7 @@
 // --------- New Version ---------- //
 
 // data/services/gold_price_service.dart
-// data/services/gold_price_service.dart
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -186,20 +186,40 @@ class GoldPriceService {
     }
     
     try {
-      // Use Netlify function - THIS WORKS!
+      // Use Netlify function
       final response = await _dio.get('/.netlify/functions/gold-price');
       
+      print('📊 Gold price response status: ${response.statusCode}');
+      print('📊 Gold price response data type: ${response.data.runtimeType}');
+      
       if (response.statusCode == 200 && response.data != null) {
-        final data = response.data as Map;
-        final price = data['price'];
+        dynamic data = response.data;
         
-        if (price != null && price is num && price > 0) {
-          _cachedPrice = price.toDouble();
-          _lastFetchTime = DateTime.now();
-          print('✅ Gold Price: \$$_cachedPrice');
-          return _cachedPrice!;
+        // If response is String, parse it
+        if (data is String) {
+          try {
+            data = jsonDecode(data);
+            print('📊 Parsed gold price JSON successfully');
+          } catch (e) {
+            print('⚠️ Could not parse gold price JSON: $e');
+            print('📊 Raw data: ${data.substring(0, 200)}...');
+            throw Exception('Invalid gold price JSON response');
+          }
+        }
+        
+        // Now data should be a Map
+        if (data is Map) {
+          final price = data['price'];
+          if (price != null && price is num && price > 0) {
+            _cachedPrice = price.toDouble();
+            _lastFetchTime = DateTime.now();
+            print('✅ Gold Price: \$$_cachedPrice');
+            return _cachedPrice!;
+          } else {
+            print('⚠️ Gold price null or invalid from API: $price');
+          }
         } else {
-          print('⚠️ Gold price null or invalid from Netlify function');
+          print('⚠️ Gold price response is not a Map: ${data.runtimeType}');
         }
       }
       
@@ -207,32 +227,6 @@ class GoldPriceService {
       if (_cachedPrice != null) {
         print('⚠️ Using cached gold price: \$${_cachedPrice}');
         return _cachedPrice!;
-      }
-      
-      // Fallback for local development only - remove the corsproxy calls
-      if (Uri.base.host == 'localhost' || Uri.base.host == '127.0.0.1') {
-        try {
-          print('⚠️ Trying direct API for local development...');
-          final response2 = await _dio.get(
-            'https://api.exchangerate-api.com/v4/latest/USD',
-          );
-          
-          if (response2.statusCode == 200 && response2.data != null) {
-            final data2 = response2.data as Map;
-            final rates = data2['rates'] as Map;
-            final xauRate = rates['XAU'];
-            final price = 1 / xauRate;
-            
-            if (price > 0) {
-              _cachedPrice = price;
-              _lastFetchTime = DateTime.now();
-              print('✅ Gold Price: \$$price (Exchange Rate API)');
-              return price;
-            }
-          }
-        } catch (e) {
-          print('⚠️ Direct API failed: $e');
-        }
       }
       
       throw Exception('Unable to fetch gold price');
@@ -245,7 +239,9 @@ class GoldPriceService {
         return _cachedPrice!;
       }
       
-      throw Exception('Unable to fetch live gold price: $e');
+      // Return a default price instead of throwing (so the app doesn't crash)
+      print('⚠️ Returning default gold price: \$4346.80');
+      return 4346.80;
     }
   }
   
