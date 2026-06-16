@@ -1,17 +1,20 @@
 [build]
-  command = "flutter build web --release"
+  command = """
+    curl -L https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.41.0-stable.tar.xz -o flutter.tar.xz &&
+    tar xf flutter.tar.xz &&
+    export PATH="$PATH:$(pwd)/flutter/bin" &&
+    flutter pub get &&
+    flutter build web --release
+  """
   publish = "build/web"
 
-[functions]
-  directory = "netlify/functions"
-  node_bundler = "esbuild"
-
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
+[build.environment]
+  FLUTTER_CHANNEL = "stable"
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+
+
+  
