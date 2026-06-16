@@ -623,4 +623,3 @@ List<EconomicEventModel> _parseForexFactoryData(dynamic data) {
     }
     return null;
   }
-}
