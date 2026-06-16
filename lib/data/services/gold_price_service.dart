@@ -161,6 +161,7 @@
 // --------- New Version ---------- //
 
 // data/services/gold_price_service.dart
+// data/services/gold_price_service.dart
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -184,148 +185,67 @@ class GoldPriceService {
       }
     }
     
-    // Try multiple free APIs
-    double? price;
-    
-    // Try 1: Twelve Data (using your API key with proxy)
-    price = await _fetchFromTwelveData();
-    if (price != null && price > 0) {
-      _cachedPrice = price;
-      _lastFetchTime = DateTime.now();
-      return price;
-    }
-    
-    // Try 2: GOLD-API via alternative proxy
-    price = await _fetchFromGoldAPIAlternative();
-    if (price != null && price > 0) {
-      _cachedPrice = price;
-      _lastFetchTime = DateTime.now();
-      return price;
-    }
-    
-    // Try 3: Exchange Rate API
-    price = await _fetchFromExchangeRateAPI();
-    if (price != null && price > 0) {
-      _cachedPrice = price;
-      _lastFetchTime = DateTime.now();
-      return price;
-    }
-    
-    // If all fail, throw error - NO FALLBACKS!
-    throw Exception('Unable to fetch live gold price from any API. Please check your internet connection.');
-  }
-  
-  // Method 1: Twelve Data API with proxy
-// Alternative gold price method using Twelve Data with proxy
-Future<double?> _fetchFromTwelveData() async {
-  try {
-    final response = await _dio.get(
-      'https://corsproxy.io/?url=' +
-      Uri.encodeComponent('https://api.twelvedata.com/price?symbol=XAU/USD&apikey=2fa1507bcb684b849020b306442fa88d'),
-    );
-    
-    if (response.statusCode == 200 && response.data != null) {
-      final data = response.data as Map?;
-      if (data != null && data.containsKey('price')) {
-        final price = double.tryParse(data['price'].toString());
-        if (price != null && price > 4000 && price < 5000) {
-          print('✅ Twelve Data Price: \$$price');
-          return price;
-        }
-      }
-    }
-    return null;
-  } catch (e) {
-    print('❌ Twelve Data error: $e');
-    return null;
-  }
-}
-
-  // Method 2: Alternative gold API (using a different endpoint)
-  Future<double?> _fetchFromGoldAPIAlternative() async {
     try {
-      // Using a different proxy and endpoint
-      final response = await _dio.get(
-        'https://cors-anywhere.herokuapp.com/https://www.gold-api.com/price/XAU',
-        options: Options(
-          headers: {
-            'Accept': 'application/json',
-          },
-        ),
-      );
+      // Use Netlify function - THIS WORKS!
+      final response = await _dio.get('/.netlify/functions/gold-price');
       
       if (response.statusCode == 200 && response.data != null) {
-        final data = response.data as Map?;
-        if (data != null && data.containsKey('price')) {
-          final price = data['price']?.toDouble();
-          if (price != null && price > 4000 && price < 5000) {
-            print('✅ Gold API Price: \$$price');
-            return price;
-          }
+        final data = response.data as Map;
+        final price = data['price'];
+        
+        if (price != null && price is num && price > 0) {
+          _cachedPrice = price.toDouble();
+          _lastFetchTime = DateTime.now();
+          print('✅ Gold Price: \$$_cachedPrice');
+          return _cachedPrice!;
+        } else {
+          print('⚠️ Gold price null or invalid from Netlify function');
         }
       }
-      return null;
-    } catch (e) {
-      print('❌ Gold API alternative error: $e');
-      return null;
-    }
-  }
-
-  // Method 3: Exchange Rate API (free, no CORS issues)
-  Future<double?> _fetchFromExchangeRateAPI() async {
-    try {
-      final response = await _dio.get(
-        'https://api.exchangerate-api.com/v4/latest/USD',
-      );
       
-      if (response.statusCode == 200 && response.data != null) {
-        final data = response.data as Map?;
-        if (data != null && data.containsKey('rates')) {
-          final rates = data['rates'] as Map?;
-          if (rates != null && rates.containsKey('XAU')) {
+      // If we have cached price, use it
+      if (_cachedPrice != null) {
+        print('⚠️ Using cached gold price: \$${_cachedPrice}');
+        return _cachedPrice!;
+      }
+      
+      // Fallback for local development only - remove the corsproxy calls
+      if (Uri.base.host == 'localhost' || Uri.base.host == '127.0.0.1') {
+        try {
+          print('⚠️ Trying direct API for local development...');
+          final response2 = await _dio.get(
+            'https://api.exchangerate-api.com/v4/latest/USD',
+          );
+          
+          if (response2.statusCode == 200 && response2.data != null) {
+            final data2 = response2.data as Map;
+            final rates = data2['rates'] as Map;
             final xauRate = rates['XAU'];
-            if (xauRate != null && xauRate > 0) {
-              final price = 1 / xauRate;
-              if (price > 4000 && price < 5000) {
-                print('✅ Exchange Rate API Price: \$$price');
-                return price;
-              }
+            final price = 1 / xauRate;
+            
+            if (price > 0) {
+              _cachedPrice = price;
+              _lastFetchTime = DateTime.now();
+              print('✅ Gold Price: \$$price (Exchange Rate API)');
+              return price;
             }
           }
+        } catch (e) {
+          print('⚠️ Direct API failed: $e');
         }
       }
-      return null;
-    } catch (e) {
-      print('❌ Exchange Rate API error: $e');
-      return null;
-    }
-  }
-
-  // Method 4: Using a different free gold price API
-  Future<double?> _fetchFromGoldPriceOrg() async {
-    try {
-      final response = await _dio.get(
-        'https://www.goldprice.org/feed/GetJson.aspx',
-        queryParameters: {
-          'd': 'USD',
-          'm': 'XAU',
-        },
-      );
       
-      if (response.statusCode == 200 && response.data != null) {
-        final data = response.data as Map?;
-        if (data != null && data.containsKey('goldprice')) {
-          final price = double.tryParse(data['goldprice'].toString());
-          if (price != null && price > 4000 && price < 5000) {
-            print('✅ Gold Price Org: \$$price');
-            return price;
-          }
-        }
-      }
-      return null;
+      throw Exception('Unable to fetch gold price');
+      
     } catch (e) {
-      print('❌ Gold Price Org error: $e');
-      return null;
+      print('❌ Gold price error: $e');
+      
+      if (_cachedPrice != null) {
+        print('⚠️ Using cached gold price: \$${_cachedPrice}');
+        return _cachedPrice!;
+      }
+      
+      throw Exception('Unable to fetch live gold price: $e');
     }
   }
   
