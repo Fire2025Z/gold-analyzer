@@ -1,12 +1,15 @@
 [build]
-  command = """
-    git clone https://github.com/flutter/flutter.git --depth 1 --branch stable &&
-    export PATH="$PATH:$(pwd)/flutter/bin" &&
-    flutter --version &&
-    flutter pub get &&
-    flutter build web --release
-  """
+  command = "flutter build web --release"
   publish = "build/web"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
 
 [[redirects]]
   from = "/*"
