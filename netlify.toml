@@ -11,6 +11,18 @@
 [build.environment]
   FLUTTER_CHANNEL = "stable"
 
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# IMPORTANT: API routes must come FIRST (before the catch-all)
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
+
+# Catch-all for Flutter routing (must come LAST)
 [[redirects]]
   from = "/*"
   to = "/index.html"
