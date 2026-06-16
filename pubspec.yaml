@@ -1,0 +1,30 @@
+name: gold_news_analyzer
+description: Professional Gold News Analyzer for XAU/USD
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  riverpod: ^2.4.9
+  flutter_riverpod: ^2.4.9
+  dio: ^5.3.3
+  intl: ^0.18.1
+  equatable: ^2.0.5
+  fl_chart: ^0.65.0
+  connectivity_plus: ^5.0.2
+  http: ^1.1.0
+  shimmer: ^3.0.0
+  flutter_dotenv: ^5.1.0  # Add this
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  mockito: ^5.4.2
+  build_runner: ^2.4.7
+
+flutter:
+  uses-material-design: true
