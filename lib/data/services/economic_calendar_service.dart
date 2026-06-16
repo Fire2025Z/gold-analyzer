@@ -312,45 +312,16 @@ class EconomicCalendarService {
     receiveTimeout: const Duration(seconds: 30),
   ));
 
-  String get apiBaseUrl {
-    // In production (Netlify)
-    if (Uri.base.host.contains('netlify.app')) {
-      return '/.netlify/functions';
-    }
-    // Local development with Netlify CLI
-    if (Uri.base.host == 'localhost' || Uri.base.host == '127.0.0.1') {
-      return 'http://localhost:8888/.netlify/functions';
-    }
-    // Fallback
-    return '/.netlify/functions';
-  }
-
   Future<List<EconomicEventModel>> getTodaysEvents() async {
     try {
-      final response = await _dio.get('$apiBaseUrl/economic-calendar');
+      // Always use relative path - works on both local and production
+      final response = await _dio.get('/api/economic-calendar');
       
       if (response.statusCode == 200 && response.data != null) {
         final events = _parseForexFactoryData(response.data);
         if (events.isNotEmpty) {
-          print('✅ Loaded ${events.length} events');
+          print('✅ Loaded ${events.length} events from Netlify function');
           return events;
-        }
-      }
-      
-      // Fallback for local development
-      if (Uri.base.host == 'localhost' || Uri.base.host == '127.0.0.1') {
-        print('⚠️ Trying fallback for local development...');
-        final response2 = await _dio.get(
-          'https://corsproxy.io/?url=' +
-          Uri.encodeComponent('https://nfs.faireconomy.media/ff_calendar_thisweek.json'),
-        );
-        
-        if (response2.statusCode == 200 && response2.data != null) {
-          final events = _parseForexFactoryData(response2.data);
-          if (events.isNotEmpty) {
-            print('✅ Loaded ${events.length} events from fallback (dev only)');
-            return events;
-          }
         }
       }
       
@@ -358,10 +329,59 @@ class EconomicCalendarService {
       
     } catch (e) {
       print('❌ API Error: $e');
+      
+      // Fallback for local development only
+      if (Uri.base.host == 'localhost' || Uri.base.host == '127.0.0.1') {
+        try {
+          print('⚠️ Trying direct API for local development...');
+          final response2 = await _dio.get(
+            'https://corsproxy.io/?url=' +
+            Uri.encodeComponent('https://nfs.faireconomy.media/ff_calendar_thisweek.json'),
+          );
+          
+          if (response2.statusCode == 200 && response2.data != null) {
+            final events = _parseForexFactoryData(response2.data);
+            if (events.isNotEmpty) {
+              print('✅ Loaded ${events.length} events from corsproxy.io (dev only)');
+              return events;
+            }
+          }
+        } catch (e2) {
+          print('⚠️ Direct API failed: $e2');
+        }
+      }
+      
       throw Exception('Failed to fetch economic data: $e');
     }
   }
-}
+
+  Future<List<EconomicEventModel>> _fetchFromAlternativeSource() async {
+    try {
+      // Using a different proxy that handles CORS better
+      final response = await _dio.get(
+        'https://corsproxy.io/?url=' +
+        Uri.encodeComponent('https://nfs.faireconomy.media/ff_calendar_thisweek.json'),
+        options: Options(
+          headers: {
+            'Accept': 'application/json',
+          },
+        ),
+      );
+      
+      if (response.statusCode == 200 && response.data != null) {
+        final events = _parseForexFactoryData(response.data);
+        if (events.isNotEmpty) {
+          print('✅ Loaded ${events.length} events from Forex Factory (via proxy)');
+          return events;
+        }
+      }
+      
+      throw Exception('Alternative source also failed');
+    } catch (e) {
+      print('❌ Alternative source error: $e');
+      throw Exception('All data sources failed. Please try again later.');
+    }
+  }
 
   List<EconomicEventModel> _parseTradingEconomicsData(dynamic data) {
     final List<EconomicEventModel> events = [];
@@ -623,3 +643,4 @@ List<EconomicEventModel> _parseForexFactoryData(dynamic data) {
     }
     return null;
   }
+}
